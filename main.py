@@ -1,32 +1,64 @@
 import gi
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, GdkPixbuf
+from gi.repository import Gtk, GdkPixbuf, GLib
 from PIL import Image
 import mutagen
 from pygame import mixer
 import time
 
 is_playing = False
+currentPos = 0
+timeout_id = None
+info = {}
+
+def update_position():
+    global currentPos, timeout_id, length, song_info, posMin, posSec
+    if is_playing == True and currentPos < song_info['sec_len']:
+        currentPos += 1
+        posPercent = currentPos/song_info['sec_len']*100
+        posSec = currentPos % 60
+        posMin = currentPos // 60
+        position.set_value(posPercent)
+        # length.set_label(str(int(currentPos)))
+        length.set_label(str(int(posMin)) + ':' + str(int(posSec)))
+        return True
+    else:
+        timeout_id = None
+        return False
+
 
 def playSong(button, song, icon_pause, icon_play):
-    global is_playing
+    global is_playing, timeout_id
     mixer.init()
     mixer.music.load(song)
-    mixer.music.play()
 
+    mixer.music.play()
     if is_playing == False:
         button.set_child(icon_pause)
         is_playing = not is_playing
+
+        if timeout_id is None:
+            timeout_id = GLib.timeout_add(1000, update_position)
     else: 
         button.set_child(icon_play)
         is_playing = not is_playing
         stopSong(button, song)
 
 def stopSong(button, song):
-    mixer.music.load(song)
+    global timeout_id, posMin, posSec, currentPos
     mixer.music.stop()
+    position.set_value(0)
+    length.set_label('0:0')
+    currentPos = 0
+    posSec = 0
+    posMin = 0
+    
+    if timeout_id: 
+        GLib.source_remove(timeout_id)
+        timeout_id = None
 
 def get_song_info(song):
+    global info
     audio = mutagen.File(song)
     tags = audio.tags
 
@@ -57,6 +89,7 @@ def get_song_info(song):
     return info
 
 def main(app):
+    global position, song_info, length, posMin, posSec
     win = Gtk.ApplicationWindow(application=app)
     win.set_title('GPlayer')
     win.set_default_size(400, 500)
@@ -65,7 +98,7 @@ def main(app):
     container.set_halign(Gtk.Align.CENTER)
     
     info_wrap = Gtk.Box()
-    song = "linkin-park-faint.mp3"
+    song = "song.mp3"
     song_info = get_song_info(song)
     artist = song_info['artist']
     name = song_info['title']
@@ -83,14 +116,15 @@ def main(app):
     cover_wrap.set_halign(Gtk.Align.CENTER)
 
     position_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-    position = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL)
-    position.set_range(0, 100)
-    length = Gtk.Label(label=f'{song_info['len']}')
+    position = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, song_info['sec_len'], 1)
+    position.set_value(0)
+    length = Gtk.Label(label=f'0:0')
     position_box.append(length)
     position_box.append(position)
 
     controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=28)
-    
+    controls.set_halign(Gtk.Align.CENTER)
+
     prev = Gtk.Picture.new_for_filename('data/prev.svg')
     play = Gtk.Picture.new_for_filename('data/play.svg')
     pause = Gtk.Picture.new_for_filename('data/pause.svg')
