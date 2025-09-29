@@ -1,6 +1,6 @@
 import gi
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, GdkPixbuf, GLib
+from gi.repository import Gtk, GdkPixbuf, GLib, Gio
 from PIL import Image
 import mutagen
 from pygame import mixer
@@ -111,7 +111,7 @@ def main(app):
     img = Image.open(song_info['cover'])
     pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(song_info['cover'], 200, 200, False)
     cover = Gtk.Picture.new_for_pixbuf(pixbuf)
-    cover.set_margin_top(margin=45)
+    cover.set_margin_top(margin=5)
     cover_wrap.append(cover)
     cover_wrap.set_halign(Gtk.Align.CENTER)
 
@@ -130,6 +130,33 @@ def main(app):
     pause = Gtk.Picture.new_for_filename('data/pause.svg')
     next = Gtk.Picture.new_for_filename('data/next.svg')
     
+    header_wrap = Gtk.Box(margin_top=8)
+    global choose_file
+    choose_file = Gtk.FileDialog()
+    def open_file(action, parameter):
+        def on_file_open_callback(dialog, result, user_data):
+            try:
+                file = dialog.open_finish(result)
+                if file:
+                    file_path = file.get_path()
+                    print(f"Selected file: {file_path}")
+                    
+                    song = str(file_path)
+                    song_info = get_song_info(song)
+                    
+            except Exception as e:
+                print(f"Error opening file: {e}")
+        choose_file.open(win, None, on_file_open_callback, None)
+    open_btn = Gio.SimpleAction.new('open_file', None)
+    open_btn.connect('activate', open_file)
+    app.add_action(open_btn)
+    menu = Gio.Menu()
+    # choose_file.open()
+    menu.append('Open File', 'app.open_file')
+    header = Gtk.MenuButton(icon_name='open-menu-symbolic')
+    header.set_menu_model(menu)
+    header_wrap.append(header)
+
     prev_btn = Gtk.Button()
     prev_btn.set_child(prev)
     play_btn = Gtk.Button()
@@ -149,6 +176,7 @@ def main(app):
     info.get_style_context().add_class('info')
     Gtk.StyleContext.add_provider_for_display(win.get_display(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
+    container.append(header_wrap)
     container.append(cover_wrap)
     container.append(info_wrap)
     container.append(position_box)
